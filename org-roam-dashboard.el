@@ -1,9 +1,12 @@
-;;; org-roam-dashboard.el --- a dashboard for org roam  -*- lexical-binding: t; -*-
+;;; org-roam-dashboard.el --- A dashboard for org roam  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2020  
+;; Copyright (C) 2020
 
 ;; Author:  <joerg@joergvolbers.de>
-;; Keywords: 
+;; Version: 0.1
+;; Package-Requires: ((seq "2.20") (emacs "26.1") (notmuch "0.29.3"))
+;; Keywords: hypermedia
+;; URL: https://github.com/publicimageltd/org-roam-dashboard
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,11 +25,14 @@
 
 ;; Provides a dashboard for org roam.
 ;;
-;; Calling `org-roam-dashboard' switches to the dashboard buffer. Use
-;; 'g' to refresh the display.
+;; Calling `org-roam-dashboard' switches to the dashboard buffer.
+;; 
+;; Use 'g' to refresh the display.
 
 ;;; Code:
 
+(require 'subr-x)
+(require 'seq)
 (require 'org-roam)
 (require 'button)
 
@@ -41,13 +47,14 @@
   'action 'org-roam-dashboard-follow-link-action)
 
 (defun org-roam-dashboard-follow-link-action (button)
+  "Follow the buttonized link in BUTTON to visit a file."
   (let* ((file-name (button-get button 'file)))
     (if (file-exists-p file-name)
 	(find-file file-name)
       (error "File '%s' not available" file-name))))
 
 (defun org-roam-dashboard-insert-link-button (file-name display-name)
-  "Insert a button linking to FILE-NAME. "
+  "Insert a link to FILE-NAME with label DISPLAY-NAME."
   (insert-button display-name
 		 'type 'org-roam-dashboard-file-link
 		 'file file-name))
@@ -57,14 +64,20 @@
 (define-button-type 'org-roam-dashboard-statistics)
 
 (defun org-roam-dashboard-pretty-number (n)
+  "Return integer N as a prettified number string."
   (let* ((number-string (format "%d" n)))
-    (reverse 
+    (reverse
      (string-join (seq-partition (reverse number-string) 3)
 		  "."))))
-  
+
 (defun org-roam-dashboard-insert-statistics-button (n &optional action-fn data title)
-  "Insert a statistic button displaying the number N."
-  (insert-button (org-roam-dashboard-pretty-number n)		 
+  "Insert a statistic button displaying the number N.
+Optionally associate an action with it (ACTION-FN).  The action
+must accept one argument, a button object.
+
+The values of DATA and TITLE are stored in this button object and can be
+accessed via `button-get'."
+  (insert-button (org-roam-dashboard-pretty-number n)
 		 'action (or action-fn #'ignore)
 		 'data   data
 		 'title  title))
@@ -72,10 +85,12 @@
 ;; * Query the last 10 modified files
 
 (defun org-roam-dashboard-convert-mtime (file-list n)
-  "Return FILE-LIST with item N interpreted as a special plist.
-The item with the index number will be interpreted as a plist
-with the key :mtime. Return FILE-LIST unmodified except that
-item, which will be replaced by the value of :mtime."
+  "Return FILE-LIST with a modified column N.
+
+Create a copy of FILE-LIST which always modifies the field (or
+column) designated by N (beginning with 0).  This special field
+will be treated as a property list and it will be replaced by the
+value of its property `:mtime'."
   (seq-map (lambda (e)
 	     (setf (seq-elt e n) (plist-get (nth n e) :mtime))
 	     e)
@@ -121,12 +136,10 @@ FILE-LIST must have the format (time-stamp file-name list-of-title-strings)."
 
 (defun org-roam-dashboard-most-linked-pages ()
   "Get a list of the 'most linked' pages.
-Returns a list of the format 
-
+Returns a list in the format
 \(meta file-name titles file-name file-name count)."
   (org-roam-db-query
-   [:select [ files:meta files:file titles:titles
-	      titles:file links:to (as (funcall count links:to) a) ]
+   [:select [ files:meta files:file titles:titles titles:file links:to (as (funcall count links:to) a) ]
 	    :from files
 	    :left-join links
 	    :on (= links:to files:file)
@@ -164,7 +177,7 @@ This is a mere copy of dash's `-flatten'."
 
 (defun org-roam-dashboard-all-tags ()
   "Return a list of all tags registered in org roam."
-  (seq-uniq 
+  (seq-uniq
    (org-roam-dashboard-flatten
     (org-roam-db-query [:select :distinct [tags:tags] :from tags]))))
 
@@ -195,6 +208,8 @@ This is a mere copy of dash's `-flatten'."
 
 ;; * Dashboard major mode
 
+(defvar special-mode-map)
+
 (defvar org-roam-dashboard-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
@@ -215,7 +230,7 @@ This is a mere copy of dash's `-flatten'."
       (goto-char (point-min))
       (let (res button)
 	(while (and (not (eobp))
-		    (setq button (next-button (point))))	  
+		    (setq button (next-button (point))))
 	  (push button res)
 	  (goto-char (button-end button)))
 	res))))
@@ -254,7 +269,7 @@ This is a mere copy of dash's `-flatten'."
 			  (org-roam-dashboard-pretty-number (length all-tags))
 			  (org-roam-dashboard-pretty-number (length all-links))))
 	  (insert "\n"))
-	;; Section: Last modified files 
+	;; Section: Last modified files
 	(insert "Last modified files:\n\n")
 	(org-roam-dashboard-insert-files buf (org-roam-dashboard-last-modified-files 10))
 	(insert "\n")
@@ -274,7 +289,7 @@ This is a mere copy of dash's `-flatten'."
 	  (insert "\n"))
 	;; Section: Blabla
 	(insert "Press `g' to update the display, `q' to bury the buffer, or `enter' on a button.")
-	;; --- 
+	;; ---
 	(org-roam-dashboard-make-intangible (current-buffer))
 	(goto-char (point-min))
 	(forward-button 1)))
