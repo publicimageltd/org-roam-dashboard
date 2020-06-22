@@ -38,6 +38,9 @@ which I hope to add in some undefined future:
  - Provide a list of some common entry points (functionally the same
    as the stash, but not relative to any project).
  
+# Screenshot
+
+![Screenshot](screenshot.png)
 
 # Installation
 
