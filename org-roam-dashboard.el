@@ -1,4 +1,4 @@
-;;; org-roam-dashboard.el --- A dashboard for org roam  -*- lexical-binding: t; -*-
+;;; org-roam-dashboard.el --- A dashboard for the org roam zettelkasten  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2020
 
