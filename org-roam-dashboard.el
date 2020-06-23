@@ -4,7 +4,7 @@
 
 ;; Author:  <joerg@joergvolbers.de>
 ;; Version: 0.1
-;; Package-Requires: ((seq "2.20") (emacs "26.1") (notmuch "0.29.3"))
+;; Package-Requires: ((seq "2.20") (emacs "26.1") (org-roam "1.2.0"))
 ;; Keywords: hypermedia
 ;; URL: https://github.com/publicimageltd/org-roam-dashboard
 
