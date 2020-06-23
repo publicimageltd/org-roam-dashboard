@@ -264,7 +264,8 @@ This is a mere copy of dash's `-flatten'."
 	(let* ((all-files (org-roam-dashboard-all-files))
 	       (all-links (org-roam-dashboard-all-file-links))
 	       (all-tags  (org-roam-dashboard-all-tags)))
-	  (insert (format "There are %s files registered, sharing %s tags and containing %s links.\n"
+	  (insert (format " Using org roam version %s; database version %s." (org-roam-version) org-roam-db--version) "\n")
+	  (insert (format " There are %s files registered, sharing %s tags and containing %s links.\n"
 			  (org-roam-dashboard-pretty-number (length all-files))
 			  (org-roam-dashboard-pretty-number (length all-tags))
 			  (org-roam-dashboard-pretty-number (length all-links))))
