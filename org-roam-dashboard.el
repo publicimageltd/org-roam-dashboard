@@ -45,51 +45,48 @@
 (defvar org-roam-dashboard-name "*Org Roam Dashboard*"
   "Name for the org roam dashboard buffer.")
 
+(defvar org-roam-dashboard-error-buffer "*Org Roam Dashboard - Error*"
+  "Name for a buffer displaying SQL errors.")
+
+(defvar org-roam-dashboard-error nil
+  "Whether an error has occured since last update.")
+
 ;; * Wrap calls to the data base in error handler
 
-(defun org-roam-dashboard-field-as-strings (field)
-  "Return FIELD as a list of symbols, split by the colon.
-E.g. FILES:HEADLINES -> (\"files\" \"headlines\")"
-  (let* ((field-as-string (symbol-name field))
-	 (colon (string-match ":" field-as-string)))
-    (if colon
-	(list (intern (substring field-as-string 0 colon))
-	      (intern (substring field-as-string (1+ colon))))
-      (error "Expected a symbol with colon; but got %s" field-string))))
+(defun org-roam-dashboard-log-error (err &rest strings)
+  "Insert ERR and additional STRINGS in the error buffer."
+  (declare (indent 1))
+  (with-current-buffer (get-buffer-create org-roam-dashboard-error-buffer)
+    (special-mode)
+    (let* ((inhibit-read-only t)
+	   (date-string (format-time-string "%D %T  "))
+	   ;; prevent logging if this is not the first error:
+	   (message-log-max (if org-roam-dashboard-error
+				nil
+			      message-log-max)))
+      (insert date-string (format "Error message: %s\n" (error-message-string err)))
+      (seq-doseq (s strings)
+	(when (stringp s)
+	  (insert date-string s "\n")))
+      (insert "\n"))
+    (unless org-roam-dashboard-error
+      (message "There are errors. See '%s' for more."
+	       org-roam-dashboard-error-buffer)
+      (setq org-roam-dashboard-error t))))
 
-(defun org-roam-dashboard-valid-field-p (table field)
-  "Check if TABLE and FIELD are defined in the org roam db."
-  (let* ((table-scheme (car (alist-get table org-roam-db--table-schemata)))
-	 (field-scheme (and table-scheme
-			    (seq-find (lambda (row)
-					(eql (if (listp row) (car row) row) field))
-				      table-scheme))))
-    (and table-scheme field-scheme)))
-
-(defun org-roam-dashboard-valid-fields-p (&rest fields)
-  "Return t if FIELDS are well defined in the org roam db.
-Fields are symbols with the format TABLE-NAME:COLUMN-NAME."
-  (seq-every-p (lambda (field)
-		 (pcase-let ((`(,table ,row) (org-roam-dashboard-field-as-strings field)))
-		   (org-roam-dashboard-valid-field-p table row)))
-	       fields))
-
-(defun org-roam-dashboard-safe-query (fields sql &rest args)
+(defun org-roam-dashboard-safe-query (sql &rest args)
   "Call SQL query (optionally using ARGS) in a safe way.
-
-Only execute the query if FIELDS conform to
-`org-roam-db--table-schemata'. 
-
-Print a message and return NIL if an error occurs"
-  (if (apply #'org-roam-dashboard-assert-fields fields)
-      (condition-case-unless-debug err
-	  (apply #'org-roam-db-query sql args)
-	(error (message "An error occured when querying the SQL data base.\n Query: %s\ Error: %s"
-			sql
-			(error-message-string err))
-	       nil))
-    (message "Unknown fields are used in the SQL query.\n Fields: %s\n Query: %s"
-	     fields sql)))
+Catch all errors and redirect the error messages to an error
+buffer.  If an error occurs, inform the user with a message and
+return nil."
+  (condition-case-unless-debug err
+      (apply #'org-roam-db-query sql args)
+    (error (org-roam-dashboard-log-error err
+	     " Error occured when executing the query:"
+	     (format " %s" sql)
+	     (when args
+	       (format " Arguments: %s" args)))
+	   nil)))
 
 ;; * Link button
 
@@ -149,10 +146,11 @@ value of its property `:mtime'."
 (defun org-roam-dashboard-last-modified-files (n)
   "Return the N last modified files."
   (let* (;; get all files                            n=0       1           2                3
-	 (all-files (org-roam-db-query [:select [files:meta files:file titles:titles titles:file]
-						:from files
-						:left-join titles
-						:on (= titles:file files:file)]))
+	 (all-files (org-roam-dashboard-safe-query
+		     [:select [files:meta files:file titles:titles titles:file]
+			      :from files
+			      :left-join titles
+			      :on (= titles:file files:file)]))
 	 ;; extract mtime property in list row 0
 	 (mod-list  (org-roam-dashboard-convert-mtime all-files 0))
 	 ;; sort by newest modification first
@@ -188,7 +186,7 @@ FILE-LIST must have the format (time-stamp file-name list-of-title-strings)."
   "Get a list of the 'most linked' pages.
 Returns a list in the format
 \(meta file-name titles file-name file-name count)."
-  (org-roam-db-query
+  (org-roam-dashboard-safe-query
    [:select [ files:meta files:file titles:titles titles:file links:to (as (funcall count links:to) a) ]
 	    :from files
 	    :left-join links
@@ -204,19 +202,19 @@ Returns a list in the format
 (defun org-roam-dashboard-orphaned-pages ()
   "Return a list of all orphaned pages.
 The fields returned are (META FILENAME TITLES FILENAME)."
-  (org-roam-db-query [:select [files:meta files:file titles:titles titles:file]
-			      :from files
-			      :left-join titles
-			      :on (= files:file titles:file)
-			      ;;(using file)
-			      :where files:file
-			      :not-in [:select to :from links]
-			      :and files:file
-			      :not-in [:select from :from links]]))
+  (org-roam-dashboard-safe-query [:select [files:metall files:file titles:titles titles:file]
+					  :from files
+					  :left-join titles
+					  :on (= files:file titles:file)
+					  ;;(using file)
+					  :where files:file
+					  :not-in [:select to :from links]
+					  :and files:file
+					  :not-in [:select from :from links]]))
 
 (defun org-roam-dashboard-all-files ()
   "Return a list of all files registered in org roam."
-  (org-roam-db-query [:select [files:meta files:file] :from files]))
+  (org-roam-dashboard-safe-query [:select [files:meta files:file] :from files]))
 
 (defun org-roam-dashboard-flatten (l)
   "Flatten L.
@@ -229,12 +227,12 @@ This is a mere copy of dash's `-flatten'."
   "Return a list of all tags registered in org roam."
   (seq-uniq
    (org-roam-dashboard-flatten
-    (org-roam-db-query [:select :distinct [tags:tags] :from tags]))))
+    (org-roam-dashboard-safe-query [:select :distinct [tags:tags] :from tags]))))
 
 (defun org-roam-dashboard-all-file-links ()
   "Return a list of all links between pages."
-  (org-roam-db-query [:select [links:from links:type] :from links
-			      :where (= type "file")]))
+  (org-roam-dashboard-safe-query [:select [links:from links:type] :from links
+					  :where (= type "file")]))
 
 (defun org-roam-dashboard-go-to-file-list (button)
   "Show the file stored in BUTTON in a new buffer."
@@ -304,6 +302,7 @@ This is a mere copy of dash's `-flatten'."
   "Insert updated informations in BUF."
   (interactive (list (current-buffer)))
   (with-temp-message "Updating dashboard display..."
+    (setq org-roam-dashboard-error nil)
     (with-current-buffer buf
       (unless (derived-mode-p 'org-roam-dashboard-mode)
 	(error "Buffer has to be on org-roam-dashboard mode"))
@@ -325,7 +324,7 @@ This is a mere copy of dash's `-flatten'."
 	(org-roam-dashboard-insert-files buf (org-roam-dashboard-last-modified-files 10))
 	(insert "\n")
 	;; Section: Orphaned Pages
-	(let* ((orphaned-files (org-roam-dashboard-orphaned-pages)))
+	(when-let* ((orphaned-files (org-roam-dashboard-orphaned-pages)))
 	  (insert "  There are ")
 	  (org-roam-dashboard-insert-statistics-button (length orphaned-files)
 						       #'org-roam-dashboard-go-to-file-list
@@ -333,7 +332,7 @@ This is a mere copy of dash's `-flatten'."
 						       "Orphaned files:")
 	  (insert " 'orphaned' files without any links.\n\n"))
 	;; Section: Most linked pages
-	(let* ((most-linked (org-roam-dashboard-most-linked-pages))
+	(when-let* ((most-linked (org-roam-dashboard-most-linked-pages))
 	       (better-list (org-roam-dashboard-convert-mtime most-linked 0)))
 	  (insert " The ten most linked to files:\n\n")
 	  (org-roam-dashboard-insert-files buf better-list)
@@ -344,6 +343,9 @@ This is a mere copy of dash's `-flatten'."
 	(org-roam-dashboard-make-intangible (current-buffer))
 	(goto-char (point-min))
 	(forward-button 1)))
+    (when org-roam-dashboard-error
+      (save-selected-window
+	  (pop-to-buffer org-roam-dashboard-error-buffer nil t)))
     buf))
 
 ;;;###autoload
