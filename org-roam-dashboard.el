@@ -29,6 +29,10 @@
 ;; 
 ;; Use 'g' to refresh the display.
 
+;; TODO
+;; - Einbauen: DB-Felder checken mit `org-roam-dashboard-assert-fields'
+
+
 ;;; Code:
 
 (require 'subr-x)
@@ -40,6 +44,52 @@
 
 (defvar org-roam-dashboard-name "*Org Roam Dashboard*"
   "Name for the org roam dashboard buffer.")
+
+;; * Wrap calls to the data base in error handler
+
+(defun org-roam-dashboard-field-as-strings (field)
+  "Return FIELD as a list of symbols, split by the colon.
+E.g. FILES:HEADLINES -> (\"files\" \"headlines\")"
+  (let* ((field-as-string (symbol-name field))
+	 (colon (string-match ":" field-as-string)))
+    (if colon
+	(list (intern (substring field-as-string 0 colon))
+	      (intern (substring field-as-string (1+ colon))))
+      (error "Expected a symbol with colon; but got %s" field-string))))
+
+(defun org-roam-dashboard-valid-field-p (table field)
+  "Check if TABLE and FIELD are defined in the org roam db."
+  (let* ((table-scheme (car (alist-get table org-roam-db--table-schemata)))
+	 (field-scheme (and table-scheme
+			    (seq-find (lambda (row)
+					(eql (if (listp row) (car row) row) field))
+				      table-scheme))))
+    (and table-scheme field-scheme)))
+
+(defun org-roam-dashboard-valid-fields-p (&rest fields)
+  "Return t if FIELDS are well defined in the org roam db.
+Fields are symbols with the format TABLE-NAME:COLUMN-NAME."
+  (seq-every-p (lambda (field)
+		 (pcase-let ((`(,table ,row) (org-roam-dashboard-field-as-strings field)))
+		   (org-roam-dashboard-valid-field-p table row)))
+	       fields))
+
+(defun org-roam-dashboard-safe-query (fields sql &rest args)
+  "Call SQL query (optionally using ARGS) in a safe way.
+
+Only execute the query if FIELDS conform to
+`org-roam-db--table-schemata'. 
+
+Print a message and return NIL if an error occurs"
+  (if (apply #'org-roam-dashboard-assert-fields fields)
+      (condition-case-unless-debug err
+	  (apply #'org-roam-db-query sql args)
+	(error (message "An error occured when querying the SQL data base.\n Query: %s\ Error: %s"
+			sql
+			(error-message-string err))
+	       nil))
+    (message "Unknown fields are used in the SQL query.\n Fields: %s\n Query: %s"
+	     fields sql)))
 
 ;; * Link button
 
@@ -103,7 +153,7 @@ value of its property `:mtime'."
 						:from files
 						:left-join titles
 						:on (= titles:file files:file)]))
-	 ;; convert format to ("file" (mtime))
+	 ;; extract mtime property in list row 0
 	 (mod-list  (org-roam-dashboard-convert-mtime all-files 0))
 	 ;; sort by newest modification first
 	 (sorted-files (seq-sort (lambda (e1 e2)
@@ -112,7 +162,7 @@ value of its property `:mtime'."
     (seq-take sorted-files n)))
 
 (defun org-roam-dashboard-truncate-string (s n)
-  "Return string S truncated to N characers."
+  "Return string S truncated to N characters."
   (substring s 0 (when (> (length s) n) n)))
 
 (defun org-roam-dashboard-insert-files (buf file-list &optional pos)
@@ -269,7 +319,7 @@ This is a mere copy of dash's `-flatten'."
 			  (org-roam-dashboard-pretty-number (length all-files))
 			  (org-roam-dashboard-pretty-number (length all-tags))
 			  (org-roam-dashboard-pretty-number (length all-links))))
-	  (insert "\n"))
+	      (insert "\n"))
 	;; Section: Last modified files
 	(insert "Last modified files:\n\n")
 	(org-roam-dashboard-insert-files buf (org-roam-dashboard-last-modified-files 10))
