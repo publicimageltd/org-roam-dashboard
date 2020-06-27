@@ -63,7 +63,7 @@ gracefully. If unexpected values occur, just do nothing.")
 (defvar org-roam-dashboard-error nil
   "Whether an error has occured since last update.")
 
-(defvar-local org-roam-dashboard-section nil
+(defvar org-roam-dashboard-section nil
   "Current section to be inserted. Used for error messages.")
 
 ;; * Wrap calls to the data base in error handler
