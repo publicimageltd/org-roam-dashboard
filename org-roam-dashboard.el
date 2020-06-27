@@ -29,9 +29,6 @@
 ;; 
 ;; Use 'g' to refresh the display.
 
-;; TODO
-;; - Einbauen: DB-Felder checken mit `org-roam-dashboard-assert-fields'
-
 
 ;;; Code:
 
@@ -42,6 +39,13 @@
 
 ;; * Variables
 
+(defvar org-roam-dashboard-sections
+  '(org-roam-dashboard-section:statistics
+    org-roam-dashboard-section:modified-files
+    org-roam-dashboard-section:orphaned-files	
+    org-roam-dashboard-section:most-linked-files)
+  "Sections which will be displayed.")
+
 (defvar org-roam-dashboard-name "*Org Roam Dashboard*"
   "Name for the org roam dashboard buffer.")
 
@@ -50,6 +54,9 @@
 
 (defvar org-roam-dashboard-error nil
   "Whether an error has occured since last update.")
+
+(defvar-local org-roam-dashboard-section nil
+  "Current section to be inserted. Used for error messages.")
 
 ;; * Wrap calls to the data base in error handler
 
@@ -64,6 +71,8 @@
 	   (message-log-max (if org-roam-dashboard-error
 				nil
 			      message-log-max)))
+      (when org-roam-dashboard-section
+	(insert date-string (format "------ Section %s:\n" org-roam-dashboard-section)))
       (insert date-string (format "Error message: %s\n" (error-message-string err)))
       (seq-doseq (s strings)
 	(when (stringp s)
@@ -202,7 +211,7 @@ Returns a list in the format
 (defun org-roam-dashboard-orphaned-pages ()
   "Return a list of all orphaned pages.
 The fields returned are (META FILENAME TITLES FILENAME)."
-  (org-roam-dashboard-safe-query [:select [files:metall files:file titles:titles titles:file]
+  (org-roam-dashboard-safe-query [:select [files:meta files:file titles:titles titles:file]
 					  :from files
 					  :left-join titles
 					  :on (= files:file titles:file)
@@ -298,6 +307,71 @@ This is a mere copy of dash's `-flatten'."
 
 ;; * Setting up the dashboard:
 
+(defmacro org-roam-dashboard-insert-section (name bindings &rest body)
+  "Insert section NAME by executing BODY using BINDINGS.
+NAME should be a quoted symbol or a string. 
+
+BINDINGS should be either nil, or an alist associating a variable
+name with a value (a `let' binding). If any of these variable in
+bindings are nil, do not insert the section. As a special case,
+do always insert a section if the value of BINDINGS is nil or t.
+
+Add a newline after executing BODY."
+  (declare (indent 2)
+	   (debug (name
+		   [&or (&rest [&or symbolp (symbolp form) (form)])
+			(symbolp form)]
+		  form body)))
+  (let ((let-bindings (cons '(t) (unless (eq t bindings) bindings))))
+    `(when-let* ,let-bindings
+       (setq org-roam-dashboard-section ,name)
+       ,@body
+       (insert "\n")
+       )))
+
+(defun org-roam-dashboard-section:statistics ()
+  "Insert statistic sections into current buffer."
+  (org-roam-dashboard-insert-section 'statistics
+      t
+    (let* ((all-files (org-roam-dashboard-all-files))
+	   (all-links (org-roam-dashboard-all-file-links))
+	   (all-tags  (org-roam-dashboard-all-tags)))
+      (insert (format " Using org roam version %s; database version %s." (org-roam-version) org-roam-db--version) "\n")
+      (insert (format " There are %s files registered, sharing %s tags and containing %s links.\n"
+		      (org-roam-dashboard-pretty-number (length all-files))
+		      (org-roam-dashboard-pretty-number (length all-tags))
+		      (org-roam-dashboard-pretty-number (length all-links)))))))
+
+(defun org-roam-dashboard-section:modified-files ()
+  "Insert information on modified files into current buffer."
+  (org-roam-dashboard-insert-section 'modified-files
+      ((modified-files (org-roam-dashboard-last-modified-files 10)))
+      (insert "Last modified files:\n\n")
+      (org-roam-dashboard-insert-files (current-buffer) modified-files)))
+
+(defun org-roam-dashboard-section:orphaned-files ()
+  "Insert information on orphaned files into current buffer."
+    (org-roam-dashboard-insert-section 'orphaned-files
+	((orphaned-files (org-roam-dashboard-orphaned-pages)))
+      (insert "  There are ")
+      (org-roam-dashboard-insert-statistics-button (length orphaned-files)
+						   #'org-roam-dashboard-go-to-file-list
+						   (org-roam-dashboard-convert-mtime orphaned-files 0)
+						   "Orphaned files:")
+      (insert " 'orphaned' files without any links.\n")))
+
+(defun org-roam-dashboard-section:most-linked-files ()
+  "Insert information on most linked files into current buffer."
+    (org-roam-dashboard-insert-section 'most-linked
+	((most-linked (org-roam-dashboard-most-linked-pages))
+	 (better-list (org-roam-dashboard-convert-mtime most-linked 0)))
+      (insert " The ten most linked to files:\n\n")
+      (org-roam-dashboard-insert-files (current-buffer) better-list)))
+
+(defun org-roam-dashboard-section:bottom ()
+  "Insert some basic information on usage."
+  (insert "Press `g' to update the display, `q' to bury the buffer, or `enter' on a button."))
+
 (defun org-roam-dashboard-update (buf)
   "Insert updated informations in BUF."
   (interactive (list (current-buffer)))
@@ -310,33 +384,13 @@ This is a mere copy of dash's `-flatten'."
 	(erase-buffer)
 	(insert "Org Roam Dashboard\n\n")
 	;; Section: Overall statistics
-	(let* ((all-files (org-roam-dashboard-all-files))
-	       (all-links (org-roam-dashboard-all-file-links))
-	       (all-tags  (org-roam-dashboard-all-tags)))
-	  (insert (format " Using org roam version %s; database version %s." (org-roam-version) org-roam-db--version) "\n")
-	  (insert (format " There are %s files registered, sharing %s tags and containing %s links.\n"
-			  (org-roam-dashboard-pretty-number (length all-files))
-			  (org-roam-dashboard-pretty-number (length all-tags))
-			  (org-roam-dashboard-pretty-number (length all-links))))
-	      (insert "\n"))
+	(org-roam-dashboard-section:statistics)
 	;; Section: Last modified files
-	(insert "Last modified files:\n\n")
-	(org-roam-dashboard-insert-files buf (org-roam-dashboard-last-modified-files 10))
-	(insert "\n")
+	(org-roam-dashboard-section:modified-files)
 	;; Section: Orphaned Pages
-	(when-let* ((orphaned-files (org-roam-dashboard-orphaned-pages)))
-	  (insert "  There are ")
-	  (org-roam-dashboard-insert-statistics-button (length orphaned-files)
-						       #'org-roam-dashboard-go-to-file-list
-						       (org-roam-dashboard-convert-mtime orphaned-files 0)
-						       "Orphaned files:")
-	  (insert " 'orphaned' files without any links.\n\n"))
+	(org-roam-dashboard-section:orphaned-files)	
 	;; Section: Most linked pages
-	(when-let* ((most-linked (org-roam-dashboard-most-linked-pages))
-	       (better-list (org-roam-dashboard-convert-mtime most-linked 0)))
-	  (insert " The ten most linked to files:\n\n")
-	  (org-roam-dashboard-insert-files buf better-list)
-	  (insert "\n"))
+	(org-roam-dashboard-section:most-linked-files)
 	;; Section: Blabla
 	(insert "Press `g' to update the display, `q' to bury the buffer, or `enter' on a button.")
 	;; ---
