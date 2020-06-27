@@ -45,7 +45,14 @@
     org-roam-dashboard-section:orphaned-files	
     org-roam-dashboard-section:most-linked-files
     org-roam-dashboard-section:bottom)
-  "Sections which will be displayed.")
+  "Sections to be displayed.
+List of function names. Each function must accept no argument.
+The function is called with the dashboard buffer set current, so
+that usual edit commands like `insert' work. To insert a link or
+a button, use the functionality provided by the library `button'.
+
+When collecting values, the section should handle errors
+gracefully. If unexpected values occur, just do nothing.")
 
 (defvar org-roam-dashboard-name "*Org Roam Dashboard*"
   "Name for the org roam dashboard buffer.")
