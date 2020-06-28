@@ -61,8 +61,8 @@ TARGET-DIR := $(shell emacs --batch --eval='(princ user-emacs-directory)')lisp/p
 
 install: | $(TARGET-DIR) $(OBJECTS)
 	@cd $(TARGET-DIR)
-	@rm -rf $(PACKAGE-NAME)
-	@mkdir $(PACKAGE-NAME)
+	@rm -rf $(TARGET-DIR)/$(PACKAGE-NAME)
+	@mkdir $(TARGET-DIR)/$(PACKAGE-NAME)
 	@cp $(SOURCE-DIR)/*.elc $(TARGET-DIR)/$(PACKAGE-NAME)/
 
 $(TARGET-DIR):
