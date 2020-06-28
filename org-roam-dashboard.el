@@ -29,7 +29,6 @@
 ;; 
 ;; Use 'g' to refresh the display.
 
-
 ;;; Code:
 
 (require 'subr-x)
@@ -41,6 +40,7 @@
 
 (defvar org-roam-dashboard-sections
   '(org-roam-dashboard-section:statistics
+    org-roam-dashboard-section:sticky-pages
     org-roam-dashboard-section:modified-files
     org-roam-dashboard-section:orphaned-files	
     org-roam-dashboard-section:most-linked-files
@@ -59,6 +59,9 @@ gracefully. If unexpected values occur, just do nothing.")
 
 (defvar org-roam-dashboard-error-buffer "*Org Roam Dashboard - Error*"
   "Name for a buffer displaying SQL errors.")
+
+(defvar org-roam-dashboard-sticky-tag "Dashboard"
+  "Special tag to show 'sticky' pages in the overview.")
 
 (defvar org-roam-dashboard-error nil
   "Whether an error has occured since last update.")
@@ -197,6 +200,25 @@ FILE-LIST must have the format (time-stamp file-name list-of-title-strings)."
 						   (file-name-nondirectory file-name)))
 	  (insert "\n"))))))
 
+;; * Get a list with the tag "Dashboard"
+
+(defun org-roam-dashboard-all-pages-with-tag (tag)
+  "Return a list of all pages tagged TAG.
+TAG must be a simple string.
+
+Returns a list in the format
+\(meta file-name titles file-name tags)."
+  (org-roam-dashboard-safe-query
+   [:select [ files:meta files:file titles:titles tags:file tags:tags ]
+	    :from files
+	    :left-join titles :on (= titles:file files:file)
+	    :left-join tags   :on (= tags:file files:file)
+	    :where (like tags:tags $r1)] (format "%%%s%%" tag)))
+
+(defun org-roam-dashboard-sticky-pages ()
+  "Get a list of pages with the sticky tag."
+  (org-roam-dashboard-all-pages-with-tag org-roam-dashboard-sticky-tag))
+
 ;; * Get a list of the 'most linked' pages
 
 (defun org-roam-dashboard-most-linked-pages ()
@@ -270,7 +292,6 @@ This is a mere copy of dash's `-flatten'."
     (org-roam-dashboard-make-intangible buf)
     (switch-to-buffer buf)))
 
-
 ;; * Dashboard major mode
 
 (defvar special-mode-map)
@@ -326,6 +347,15 @@ This is a mere copy of dash's `-flatten'."
 		    (org-roam-dashboard-pretty-number (length all-tags))
 		    (org-roam-dashboard-pretty-number (length all-links))))))
 
+(defun org-roam-dashboard-section:sticky-pages ()
+  "Insert a list of pages marked as 'sticky'. 
+See `org-roam-dashboard-sticky-tag'"
+  (when-let* ((sticky-pages (org-roam-dashboard-sticky-pages)))
+    (insert "Sticky pages: \n\n")
+    (org-roam-dashboard-insert-files (current-buffer)
+				     (org-roam-dashboard-convert-mtime sticky-pages 0))))
+
+
 (defun org-roam-dashboard-section:modified-files ()
   "Insert information on modified files into current buffer."
   (when-let* ((modified-files (org-roam-dashboard-last-modified-files 10)))
@@ -348,6 +378,7 @@ This is a mere copy of dash's `-flatten'."
 	      (better-list (org-roam-dashboard-convert-mtime most-linked 0)))
     (insert " The ten most linked to files:\n\n")
     (org-roam-dashboard-insert-files (current-buffer) better-list)))
+
 
 (defun org-roam-dashboard-section:bottom ()
   "Insert some basic information on usage."
