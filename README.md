@@ -12,6 +12,7 @@ editing your zettelkasten.
 Currently, *org dashboard* provides:
 
  - Some general statistics about the contents of zettelkasten.
+ - A list of pages marked as 'sticky' by using the tag 'Dashboard'
  - A list of the last ten modified files.
  - A list of the top ten files with the highest number of links (so to
    speak the top ten of the most interesting files).
@@ -35,7 +36,7 @@ which I hope to add in some undefined future:
  - [ ] Provide a persistent "stash" to mark some pages for further use.
  - [ ]  Display persistent "notes to self" so that you can keep notes on
    the current state of your zettelkasten project(s).
- - [ ] Provide a list of some common entry points (functionally the same
+ - [X] Provide a list of some common entry points (functionally the same
    as the stash, but not relative to any project).
  - [x] Provide some basic erorr handling for the SQL queries.
  
@@ -95,3 +96,17 @@ that might be produced by the query. If an error happens, the error
 string plus some additional information (i.e. about the section in
 which this erronous call had happened) will be inserted in a special
 error log buffer, which pops up.
+
+# Additional informations
+
+## Sticky pages
+
+The first section shows pages marked as sticky. Thus you can mark some
+pages as common entry points for your research. A natural sticky page
+would be the index file.
+
+A page can be marked as 'sticky' by adding the tag 'Dashboard'. The
+tag can be customized by changing the value of
+`org-roam-dashboard-sticky-tag`. Sticky pages will be displayed in the
+list until the tag is removed again.
+
