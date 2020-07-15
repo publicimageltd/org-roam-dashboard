@@ -54,6 +54,9 @@ a button, use the functionality provided by the library `button'.
 When collecting values, the section should handle errors
 gracefully. If unexpected values occur, just do nothing.")
 
+(defvar org-roam-dashboard-database-version 7
+  "Database version for which this dashboard is tested.")
+
 (defvar org-roam-dashboard-name "*Org Roam Dashboard*"
   "Name for the org roam dashboard buffer.")
 
@@ -167,7 +170,7 @@ value of its property `:mtime'."
   "Return the N last modified files."
   (let* (;; get all files                            n=0       1           2                3
 	 (all-files (org-roam-dashboard-safe-query
-		     [:select [files:meta files:file titles:titles titles:file]
+		     [:select [files:meta files:file titles:title titles:file]
 			      :from files
 			      :left-join titles
 			      :on (= titles:file files:file)]))
@@ -192,7 +195,7 @@ FILE-LIST must have the format (time-stamp file-name list-of-title-strings)."
       (seq-doseq (item file-list)
 	(let* ((time-string  (format-time-string "%D %T" (car item)))
 	       (file-name    (nth 1 item))
-	       (display-name (car (nth 2 item))))
+	       (display-name (nth 2 item)))
 	  (insert "  " time-string " ")
 	  (org-roam-dashboard-insert-link-button file-name
 						 (if display-name
@@ -209,7 +212,9 @@ TAG must be a simple string.
 Returns a list in the format
 \(meta file-name titles file-name tags)."
   (org-roam-dashboard-safe-query
-   [:select [ files:meta files:file titles:titles tags:file tags:tags ]
+   [:select [ files:meta files:file
+	     titles:title
+	     tags:file tags:tags ]
 	    :from files
 	    :left-join titles :on (= titles:file files:file)
 	    :left-join tags   :on (= tags:file files:file)
@@ -226,7 +231,7 @@ Returns a list in the format
 Returns a list in the format
 \(meta file-name titles file-name file-name count)."
   (org-roam-dashboard-safe-query
-   [:select [ files:meta files:file titles:titles titles:file links:to (as (funcall count links:to) a) ]
+   [:select [ files:meta files:file titles:title titles:file links:to (as (funcall count links:to) a) ]
 	    :from files
 	    :left-join links
 	    :on (= links:to files:file)
@@ -241,7 +246,7 @@ Returns a list in the format
 (defun org-roam-dashboard-orphaned-pages ()
   "Return a list of all orphaned pages.
 The fields returned are (META FILENAME TITLES FILENAME)."
-  (org-roam-dashboard-safe-query [:select [files:meta files:file titles:titles titles:file]
+  (org-roam-dashboard-safe-query [:select [files:meta files:file titles:title titles:file]
 					  :from files
 					  :left-join titles
 					  :on (= files:file titles:file)
@@ -341,7 +346,12 @@ This is a mere copy of dash's `-flatten'."
   (let* ((all-files (org-roam-dashboard-all-files))
 	 (all-links (org-roam-dashboard-all-file-links))
 	 (all-tags  (org-roam-dashboard-all-tags)))
-    (insert (format " Using org roam version %s; database version %s." (org-roam-version) org-roam-db--version) "\n")
+    (insert (format " Using org roam version %s; database version %s; tested with database version %s."
+		    (org-roam-version)
+		    org-roam-db--version
+		    org-roam-dashboard-database-version 
+		    )
+	    "\n")
     (insert (format " There are %s files registered, sharing %s tags and containing %s links.\n"
 		    (org-roam-dashboard-pretty-number (length all-files))
 		    (org-roam-dashboard-pretty-number (length all-tags))
