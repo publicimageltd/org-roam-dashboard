@@ -12,15 +12,20 @@ editing your zettelkasten.
 Currently, *org dashboard* provides:
 
  - Some general statistics about the contents of zettelkasten.
- - A list of pages marked as 'sticky' by using the tag 'Dashboard'
+ - A permanent list showing pages which are marked as 'sticky'.
  - A list of the last ten modified files.
  - A list of the top ten files with the highest number of links (so to
    speak the top ten of the most interesting files).
  - A shortcut to list all org roam pages which have no links, and to
    which no link is provided ('orphaned' pages).
- - Graceful handling of DB errors.
+ - Graceful handling of DB errors. If the queries do not succeed, skip
+   the section and print the error message in a separate buffer.
 
 # State of the package
+
+`org-roam-dashboard` currently supports `org-roam` with database
+version 7. Due to a breaking change coming with this version, older
+versions are not supported.
 
 This package is my personal landing page for org roam. Thus, essential
 features are still missing. There are no tests and there is no support
@@ -33,7 +38,8 @@ which I hope to add in some undefined future:
 
  - [ ] Links to use `rg.el` to search the zettelkasten directory with
    ripgrep.
- - [ ] Provide a persistent "stash" to mark some pages for further use.
+ - [X] Provide a persistent "stash" to mark some pages for further
+       use. - This is actually possible with 'sticky' pages.
  - [ ]  Display persistent "notes to self" so that you can keep notes on
    the current state of your zettelkasten project(s).
  - [X] Provide a list of some common entry points (functionally the same
