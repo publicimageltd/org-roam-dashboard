@@ -1,5 +1,9 @@
 # org-roam-dashboard
 
+
+THIS PACKAGE IS DISCONTINUED. USE [DELVE](https://github.com/publicimageltd/delve) INSTEAD!
+===========================================================================================
+
 A dashboard for org roam.
 
 This package provides a dashboard to be used as a generic entry point
